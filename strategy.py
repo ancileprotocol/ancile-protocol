@@ -9,8 +9,8 @@ def get_signal(stats):
 
     print(f"  5m: {c5m:+.2f}% | 1h: {c1h:+.2f}% | 6h: {c6h:+.2f}% | 24h: {c24h:+.2f}%")
 
-    if c5m > 0.3 and c1h > 0.5 and c6h > 1:
-        return "BUY"
+    if c5m > 0.1 and c1h > 0.2 and c6h > 0.3:
+    return "BUY"
 
     if c5m < -1 and c1h < -2:
         return "SELL"
