@@ -322,9 +322,9 @@ def stake_tokens():
         "tx":     verify["signature"]
     })
 
-@app.route('/user_stats', methods=['POST'])
+@app.route('/user_stats', methods=['GET', 'POST'])
 def user_stats():
-    user = (request.json or {}).get('wallet', '')
+    user = (request.json or {}).get('wallet', '') if request.method == 'POST' else request.args.get('wallet', '')
     if user in STAKERS_DB:
         calculate_interest(user, STAKERS_DB[user], time.time())
         d = STAKERS_DB[user]
