@@ -378,6 +378,133 @@ def handle_plain_address(message):
         )
 
 # ============================================================
+# AUTO-MOD — delete spam and ban promoters
+# ============================================================
+
+# Your group/channel chat ID — get it by adding @userinfobot to your group
+GROUP_CHAT_ID = os.getenv("GROUP_CHAT_ID", "")
+
+# Keywords that trigger auto-ban
+SPAM_KEYWORDS = [
+    # Pump and shill patterns
+    "100x", "1000x", "gem", "moonshot", "presale", "pre-sale",
+    "whitelist", "airdrop", "free tokens", "guaranteed profit",
+    "next solana", "next btc", "buy now", "don't miss",
+    "low cap", "microcap", "x100", "x1000",
+    # Common spam phrases
+    "dm me", "dm for", "check my bio", "check bio",
+    "join our", "join my", "t.me/", "telegram.me/",
+    # Contract address spam (other tokens)
+    "pump.fun", "just launched", "just deployed", "stealth launch",
+    "fair launch", "renounced", "lp locked",
+    # Other chain spam
+    "eth contract", "bsc contract", "base contract",
+]
+
+# Whitelist — these users will never be banned (add admin usernames)
+WHITELISTED_USERS = [
+    "ancileprotocol",  # your username
+]
+
+def is_spam(text):
+    """Check if a message contains spam keywords"""
+    if not text:
+        return False, None
+    text_lower = text.lower()
+    for keyword in SPAM_KEYWORDS:
+        if keyword.lower() in text_lower:
+            return True, keyword
+    return False, None
+
+def is_spam_ai(text):
+    """Use Claude AI to detect spam more intelligently"""
+    if not text or len(text) < 10:
+        return False
+    try:
+        verdict = ask_claude(f"""
+You are a Telegram group moderator for a Solana crypto security project called Ancile Protocol.
+Is this message spam, token promotion, scam, or unauthorized advertising?
+
+Message: "{text}"
+
+Examples of SPAM:
+- Promoting other tokens or coins
+- Sharing contract addresses of other projects
+- "DM me for alpha"
+- Pump.fun links
+- Airdrop or presale promotions
+- "100x gem" type messages
+- Referral links
+- Random t.me links
+
+Examples of CLEAN:
+- Questions about Ancile Protocol
+- Security questions
+- General Solana discussion
+- Legitimate conversation
+
+Reply with only one word: SPAM or CLEAN
+""")
+        return "SPAM" in verdict.upper()
+    except:
+        return False
+
+def is_whitelisted(user):
+    """Check if user is whitelisted"""
+    if not user:
+        return False
+    username = user.username or ""
+    return username.lower() in [w.lower() for w in WHITELISTED_USERS]
+
+@bot.message_handler(func=lambda message: True, content_types=['text'])
+def auto_mod(message):
+    """Auto-mod all group messages"""
+    print(f"💬 Chat ID: {message.chat.id} | Type: {message.chat.type} | User: {message.from_user.username}")
+    # Only moderate group chats
+    if message.chat.type not in ['group', 'supergroup']:
+        return
+
+    # Skip whitelisted users
+    if is_whitelisted(message.from_user):
+        return
+
+    # Skip bot messages
+    if message.from_user.is_bot:
+        return
+
+    text = message.text or ""
+    spam, keyword = is_spam(text)
+
+    if not spam:
+        spam    = is_spam_ai(text)
+        keyword = "AI detected"
+
+    if spam:
+        try:
+            # 1. Delete the message
+            bot.delete_message(message.chat.id, message.message_id)
+
+            # 2. Ban the user
+            bot.ban_chat_member(message.chat.id, message.from_user.id)
+
+            # 3. Log it
+            username = message.from_user.username or message.from_user.first_name
+            print(f"🚫 BANNED: @{username} — triggered keyword: '{keyword}'")
+
+            # 4. Post warning in group
+            warning = (
+                f"🚫 @{username} was automatically removed for "
+                f"promoting unauthorized content.\n\n"
+                f"_Ancile Protocol Auto-Mod_ 🛡️"
+            )
+            bot.send_message(message.chat.id, warning, parse_mode="Markdown")
+
+        except Exception as e:
+            print(f"⚠️ Mod error: {e}")
+
+
+
+# ============================================================
 # RUN
 # ============================================================
 if __name__ == "__main__":
