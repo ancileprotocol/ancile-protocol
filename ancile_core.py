@@ -420,8 +420,43 @@ def get_threats():
         "current_level":  CURRENT_STATE["threat_level"]
     })
 
+
+@app.route('/webhook', methods=['POST'])
+def helius_webhook():
+    """Receives instant push notifications from Helius"""
+    events = request.json or []
+    for event in events:
+        tx_type  = event.get("type", "UNKNOWN")
+        accounts = event.get("accountData", [])
+        sig      = event.get("signature", "")[:12]
+
+        print(f"⚡ HELIUS PUSH: {tx_type} | {sig}...")
+
+        # Check for failed transactions or suspicious patterns
+        if event.get("transactionError"):
+            CURRENT_STATE["threat_level"] = "CRITICAL"
+            CURRENT_STATE["current_task"] = f"Failed tx detected: {sig}..."
+            CURRENT_STATE["last_threat"]  = time.time()
+            REAL_STATS["threats_detected"] += 1
+            THREAT_LOG.append({
+                "time":    time.strftime("%Y-%m-%d %H:%M:%S"),
+                "sig":     sig,
+                "type":    tx_type,
+                "level":   "CRITICAL",
+                "source":  "helius"
+            })
+            save_json(THREATS_FILE, THREAT_LOG[-100:])
+            save_json(STATS_FILE, REAL_STATS)
+
+    return jsonify({"status": "received"})
+```
+
+**Step 4** — Add your Cloudflare URL to `.env`:
+```
+CLOUDFLARE_URL=https://timber-epinions-liver-varieties.trycloudflare.com
+
 if __name__ == '__main__':
     print("🛡️  ANCILE PROTOCOL CORE STARTING...")
     print(f"🏦  Vault:  {VAULT_ADDRESS}")
     print(f"🪙   Token: {TOKEN_MINT}")
-    app.run(port=5000, debug=False)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
